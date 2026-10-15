@@ -23,6 +23,16 @@ El proyecto usa Vercel Blob **privado** y funciones API propias. El contenido de
 3. En **Settings → Environment Variables**, añade `KRONO_PASSWORD` (contraseña larga y única), `KRONO_SESSION_SECRET` (secreto aleatorio de al menos 32 caracteres), `KRONO_HOURLY_RATE`, `KRONO_MONTHLY_GROSS` y `KRONO_MONTHLY_NET` con los valores de tu nómina. Una forma de generar el secreto localmente es `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`. No pongas estas cifras o secretos en el código ni en el navegador.
 4. Vuelve a desplegar y abre la web. En **Ajustes → Sincronización privada**, conecta con `KRONO_PASSWORD` desde cada dispositivo.
 
+## Conectar asistentes (MCP)
+
+Krono también ofrece una conexión MCP en `https://kronotime.vercel.app/mcp` para clientes compatibles, como Codex, ChatGPT y Claude. El acceso utiliza OAuth y la contraseña de Krono; no requiere copiar `BLOB_READ_WRITE_TOKEN`, `KRONO_SESSION_SECRET` ni otras claves de Vercel al asistente. Cada asistente pide autorización en una página de Krono. Puedes conceder solo lectura o habilitar también la escritura de turnos.
+
+Herramientas disponibles: consultar resumen semanal/mensual, consultar turnos y trabajos, y añadir, modificar o eliminar turnos. Los cálculos respetan tarifas y reglas de pausa guardadas. Las escrituras comprueban el ETag de Vercel Blob; si otro dispositivo cambia los datos a la vez, Krono devuelve un conflicto en lugar de sobrescribirlo.
+
+Para conectar, añade la URL `https://kronotime.vercel.app/mcp` como servidor MCP remoto en el asistente. Si el asistente permite configurar OAuth, usa el descubrimiento estándar de Krono; inicia sesión en la página de autorización y elige los permisos que quieres conceder. Los tokens duran 14 días; cuando caduquen, el cliente solicitará autorización de nuevo. No se guardan contraseñas ni secretos en el cliente MCP.
+
+El acceso se puede revocar para todos los asistentes rotando `KRONO_SESSION_SECRET` en las variables privadas de Vercel y redeplegando. Para cerrar sesiones de Krono existentes, cambia también `KRONO_PASSWORD`.
+
 Si se despliega sin el Blob privado y estas variables, la app sigue funcionando en local, pero aún no activa la sincronización ni precarga la nómina. Vercel no crea el almacén ni las credenciales por el mero hecho de alojar la web.
 
 ## Uso y datos

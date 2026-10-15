@@ -10,6 +10,7 @@ Krono is Oscar's Spanish personal work calendar. Keep it focused on shifts, paid
 - The client synchronizes after edits and polls for other-device changes. Preserve ETag conflict checks; do not overwrite concurrent changes silently.
 - JSON backups contain personal schedule and salary data. Preserve fields such as `jobs`, `shifts`, `breakRules`, `taxRate`, `monthlyGross`, `monthlyNet`, and `currency`.
 - Codex may inspect a backup JSON the user explicitly shares, and should return edits in the same format. Do not upload that backup to another service.
+- The remote MCP endpoint is `/mcp`, with OAuth tokens signed by `KRONO_SESSION_SECRET`; never pass Vercel Blob credentials to clients. Keep its `krono:read` and `krono:write` scopes separate and preserve conditional ETag checks for every write.
 
 ## Product rules
 
