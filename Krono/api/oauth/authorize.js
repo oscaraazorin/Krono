@@ -15,7 +15,7 @@ function loginForm(response, authreq, write, clientName, error = '') {
   const description = write
     ? 'Este asistente solicita consultar tus turnos e ingresos y también añadir o modificar turnos.'
     : 'Este asistente solicita consultar tus turnos e ingresos. No podrá modificarlos.';
-  const content = `<p style="color:#a8f25b;font-weight:700">${escapeHtml(clientName)}</p>${error ? `<p style="color:#ff8790">${escapeHtml(error)}</p>` : ''}<p style="color:#a5aec0;line-height:1.6">${escapeHtml(description)}</p><form method="post" action="/api/oauth/authorize"><input type="hidden" name="authreq" value="${escapeHtml(authreq)}"><label style="display:block;font-size:13px;margin:18px 0 6px">Contraseña de Krono</label><input required type="password" name="password" autocomplete="current-password" style="width:100%;box-sizing:border-box;padding:13px;background:#0e131b;color:#fff;border:1px solid #344053;border-radius:10px"><label style="display:flex;gap:9px;align-items:flex-start;margin:16px 0;color:#a5aec0;font-size:13px;line-height:1.5"><input type="checkbox" name="allowWrite" value="yes" ${write ? 'checked' : ''} style="margin-top:3px">Permitir que añada o modifique turnos</label><button style="width:100%;margin-top:8px;padding:13px;border:0;border-radius:10px;background:#a8f25b;color:#10150d;font-weight:800">Autorizar asistente</button></form><p style="color:#768196;font-size:12px;margin:16px 0 0">Las claves de Vercel no se comparten. Puedes revocar el acceso cambiando la contraseña de Krono y el secreto de sesión en Vercel.</p>`;
+  const content = `<p style="color:#a8f25b;font-weight:700">${escapeHtml(clientName)}</p>${error ? `<p role="alert" style="color:#ff8790;line-height:1.5">${escapeHtml(error)}</p>` : ''}<p style="color:#a5aec0;line-height:1.6">${escapeHtml(description)}</p><form method="post" action="/api/oauth/authorize" accept-charset="UTF-8"><input type="hidden" name="authreq" value="${escapeHtml(authreq)}"><label style="display:block;font-size:13px;margin:18px 0 6px">Contraseña de Krono</label><input required type="password" name="password" autocomplete="current-password" style="width:100%;box-sizing:border-box;padding:13px;background:#0e131b;color:#fff;border:1px solid #344053;border-radius:10px"><label style="display:flex;gap:9px;align-items:flex-start;margin:16px 0;color:#a5aec0;font-size:13px;line-height:1.5"><input type="checkbox" name="allowWrite" value="yes" ${write ? 'checked' : ''} style="margin-top:3px">Permitir que añada o modifique turnos</label><button type="submit" style="width:100%;margin-top:8px;padding:13px;border:0;border-radius:10px;background:#a8f25b;color:#10150d;font-weight:800">Autorizar asistente</button></form><p style="color:#768196;font-size:12px;margin:16px 0 0">Las claves de Vercel no se comparten. Puedes revocar el acceso cambiando la contraseña de Krono y el secreto de sesión en Vercel.</p>`;
   return page(response, 200, 'Conectar un asistente', content);
 }
 
@@ -37,16 +37,24 @@ export default async function handler(request, response) {
     return loginForm(response, authreq, scopes.includes('krono:write'), client.name);
   }
   if (request.method !== 'POST') return response.status(405).end();
+  console.info('[krono-oauth] authorization form submitted');
   const body = readBody(request);
   const authorization = verify(body.authreq, 'authreq');
   const client = authorization && verify(authorization.client_id, 'client');
-  if (!authorization || !client || !client.redirect_uris.includes(authorization.redirect_uri) || !safeRedirect(authorization.redirect_uri)) return page(response, 400, 'Solicitud caducada', '<p>Vuelve a iniciar la conexión desde el asistente.</p>');
-  if (!loginMatches(body.password)) return loginForm(response, body.authreq, authorization.scope.includes('krono:write'), client.name, 'La contraseña de Krono no coincide.');
+  if (!authorization || !client || !client.redirect_uris.includes(authorization.redirect_uri) || !safeRedirect(authorization.redirect_uri)) {
+    console.warn('[krono-oauth] authorization request invalid or expired');
+    return page(response, 400, 'Solicitud caducada', '<p>Vuelve a iniciar la conexión desde el asistente.</p>');
+  }
+  if (!loginMatches(body.password)) {
+    console.warn('[krono-oauth] password rejected');
+    return loginForm(response, body.authreq, authorization.scope.includes('krono:write'), client.name, 'La contraseña de Krono no coincide.');
+  }
   const scope = ['krono:read', ...(authorization.scope.includes('krono:write') && body.allowWrite === 'yes' ? ['krono:write'] : [])];
+  console.info('[krono-oauth] authorization approved', { write: scope.includes('krono:write') });
   const code = issue({ type: 'code', exp: Math.floor(Date.now() / 1000) + 180, client_id: authorization.client_id, redirect_uri: authorization.redirect_uri, challenge: authorization.challenge, scope });
   const target = new URL(authorization.redirect_uri);
   target.searchParams.set('code', code);
   target.searchParams.set('state', authorization.state);
   response.setHeader('Cache-Control', 'no-store');
-  return response.redirect(302, target.toString());
+  return response.redirect(303, target.toString());
 }
