@@ -55,8 +55,6 @@ export default async function handler(request, response) {
   const target = new URL(authorization.redirect_uri);
   target.searchParams.set('code', code);
   target.searchParams.set('state', authorization.state);
-  response.setHeader('Cache-Control', 'no-store');
-  response.status(303);
-  response.setHeader('Location', target.toString());
-  return response.end();
+  const content = `<p style="color:#a5aec0;line-height:1.6">El permiso se ha concedido. Pulsa este botón para volver a Codex y terminar la conexión.</p><a href="${escapeHtml(target.toString())}" style="display:block;text-align:center;text-decoration:none;margin-top:20px;padding:13px;border-radius:10px;background:#a8f25b;color:#10150d;font-weight:800">Volver a Codex</a><p style="color:#768196;font-size:12px;line-height:1.5;margin:16px 0 0">Si el navegador avisa de que no encuentra la página, deja esta pestaña abierta: Codex recibirá el enlace igualmente.</p>`;
+  return page(response, 200, 'Permiso concedido', content);
 }
