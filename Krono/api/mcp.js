@@ -16,7 +16,6 @@ const tools = [
   { name: 'krono_list_jobs', title: 'Consultar trabajos', description: 'Lista los perfiles de empleo y sus tarifas por hora configuradas en Krono.', annotations: { readOnlyHint: true }, inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
   { name: 'krono_add_shift', title: 'Añadir turno', description: 'Añade un turno al calendario. Pide o confirma la fecha y las horas si no están claras. Pausas y sueldo se calculan según los ajustes actuales de Krono.', annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }, inputSchema: { type: 'object', properties: { date: { type: 'string', description: 'Fecha local YYYY-MM-DD.' }, start: { type: 'string', description: 'Hora de inicio HH:MM, formato 24 h.' }, end: { type: 'string', description: 'Hora final HH:MM, formato 24 h.' }, jobId: { type: 'string', description: 'ID de un perfil devuelto por krono_list_jobs. Si se omite, se usa el trabajo actual.' }, type: { type: 'string', enum: ['contract', 'extra'], description: 'Tipo de horas.' }, notes: { type: 'string', description: 'Nota opcional.' } }, required: ['date', 'start', 'end'], additionalProperties: false } },
   { name: 'krono_update_shift', title: 'Modificar turno', description: 'Modifica un turno existente usando su ID de krono_list_shifts. Solo cambia los campos que se indiquen.', annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }, inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'ID del turno.' }, date: { type: 'string', description: 'Nueva fecha local YYYY-MM-DD.' }, start: { type: 'string', description: 'Nueva hora de inicio HH:MM.' }, end: { type: 'string', description: 'Nueva hora final HH:MM.' }, jobId: { type: 'string', description: 'ID del perfil de empleo.' }, type: { type: 'string', enum: ['contract', 'extra'] }, notes: { type: 'string' } }, required: ['id'], additionalProperties: false } },
-  { name: 'krono_delete_shift', title: 'Eliminar turno', description: 'Elimina un turno existente. Úsalo solo cuando el usuario lo pida expresamente y confirma el día y horario antes de borrar.', annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }, inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'ID del turno.' } }, required: ['id'], additionalProperties: false } },
 ];
 
 function json(response, status, body) { return response.status(status).json(body); }
@@ -34,7 +33,7 @@ function summarize(data, shifts, startDate, endDate) {
 function localToday() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date()); }
 
 async function runTool(name, args) {
-  const needsWrite = ['krono_add_shift', 'krono_update_shift', 'krono_delete_shift'].includes(name);
+  const needsWrite = ['krono_add_shift', 'krono_update_shift'].includes(name);
   if (!args || typeof args !== 'object' || Array.isArray(args)) fail('Los parámetros no son válidos.');
   const { data, etag } = await readKrono();
   if (name === 'krono_list_jobs') return { jobs: data.jobs.map(({ id, name, rate, color, isCurrent }) => ({ id, name, rate, currency: data.currency || 'CHF', color, isCurrent: !!isCurrent })) };
@@ -83,15 +82,6 @@ async function runTool(name, args) {
     await writeKrono(data, etag);
     return { saved: true, shift: formatShift(next, data) };
   }
-  if (name === 'krono_delete_shift') {
-    if (typeof args.id !== 'string' || !args.id) fail('Falta el ID del turno.');
-    const shift = data.shifts.find(item => item.id === args.id);
-    if (!shift) fail('No existe ese turno; consulta krono_list_shifts para ver sus IDs.');
-    const deleted = formatShift(shift, data);
-    data.shifts = data.shifts.filter(item => item.id !== args.id);
-    await writeKrono(data, etag);
-    return { deleted: true, shift: deleted };
-  }
   fail('Herramienta desconocida.');
 }
 
@@ -112,13 +102,13 @@ export default async function handler(request, response) {
     let result;
     if (message.method === 'initialize') {
       const requested = message.params?.protocolVersion;
-      result = { protocolVersion: protocolVersions.includes(requested) ? requested : '2025-03-26', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'krono', version: '1.0.0' }, instructions: 'Krono guarda un calendario personal de turnos. Consulta con krono_get_summary o krono_list_shifts; utiliza krono_add_shift, krono_update_shift o krono_delete_shift solo cuando el usuario pida explícitamente el cambio. Las pausas, horas pagadas e ingresos se calculan con los ajustes actuales. El acceso de escritura depende del consentimiento OAuth concedido por el usuario.' };
+      result = { protocolVersion: protocolVersions.includes(requested) ? requested : '2025-03-26', capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'krono', version: '1.0.0' }, instructions: 'Krono guarda un calendario personal de turnos. Consulta con krono_get_summary o krono_list_shifts; utiliza krono_add_shift o krono_update_shift solo cuando el usuario pida explícitamente el cambio. Las pausas, horas pagadas e ingresos se calculan con los ajustes actuales. El acceso de escritura depende del consentimiento OAuth concedido por el usuario.' };
     } else if (message.method === 'ping') result = {};
     else if (message.method === 'tools/list') result = { tools };
     else if (message.method === 'tools/call') {
       const name = message.params?.name;
       const args = message.params?.arguments || {};
-      const writeTool = ['krono_add_shift', 'krono_update_shift', 'krono_delete_shift'].includes(name);
+      const writeTool = ['krono_add_shift', 'krono_update_shift'].includes(name);
       const requiredScope = writeTool ? 'krono:write' : 'krono:read';
       if (!tools.some(tool => tool.name === name)) result = { content: [{ type: 'text', text: 'Herramienta desconocida.' }], isError: true };
       else if (!bearer(request, requiredScope)) result = { content: [{ type: 'text', text: writeTool ? 'Esta conexión solo tiene permiso de lectura. Vuelve a autorizar Krono con permiso de escritura.' : 'Esta conexión no tiene permiso para leer datos de Krono.' }], isError: true };

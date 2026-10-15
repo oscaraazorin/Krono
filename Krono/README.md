@@ -27,7 +27,7 @@ El proyecto usa Vercel Blob **privado** y funciones API propias. El contenido de
 
 Krono también ofrece una conexión MCP en `https://kronotime.vercel.app/mcp` para clientes compatibles, como Codex, ChatGPT y Claude. El acceso utiliza OAuth y la contraseña de Krono; no requiere copiar `BLOB_READ_WRITE_TOKEN`, `KRONO_SESSION_SECRET` ni otras claves de Vercel al asistente. Cada asistente pide autorización en una página de Krono. Puedes conceder solo lectura o habilitar también la escritura de turnos.
 
-Herramientas disponibles: consultar resumen semanal/mensual, consultar turnos y trabajos, y añadir, modificar o eliminar turnos. Los cálculos respetan tarifas y reglas de pausa guardadas. Las escrituras comprueban el ETag de Vercel Blob; si otro dispositivo cambia los datos a la vez, Krono devuelve un conflicto en lugar de sobrescribirlo.
+Herramientas disponibles: consultar resumen semanal/mensual, consultar turnos y trabajos, y añadir o modificar turnos. Los cálculos respetan tarifas y reglas de pausa guardadas. Las escrituras comprueban el ETag de Vercel Blob; si otro dispositivo cambia los datos a la vez, Krono devuelve un conflicto en lugar de sobrescribirlo.
 
 Para conectar, añade la URL `https://kronotime.vercel.app/mcp` como servidor MCP remoto en el asistente. Si el asistente permite configurar OAuth, usa el descubrimiento estándar de Krono; inicia sesión en la página de autorización y elige los permisos que quieres conceder. Los tokens duran 14 días; cuando caduquen, el cliente solicitará autorización de nuevo. No se guardan contraseñas ni secretos en el cliente MCP.
 
