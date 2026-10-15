@@ -1,8 +1,14 @@
-import { get, head, put } from '@vercel/blob';
+import { BlobNotFoundError, get, head, put } from '@vercel/blob';
 import { configured, sameOrigin, validSession } from '../lib/session.js';
 
 const PATH = 'krono/private/data.json';
 const HEADERS = { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' };
+
+function isBlobNotFound(error) {
+  return error instanceof BlobNotFoundError ||
+    error?.name === 'BlobNotFoundError' ||
+    error?.constructor?.name === 'BlobNotFoundError';
+}
 
 function initialProfile() {
   const gross = Number(process.env.KRONO_MONTHLY_GROSS);
@@ -45,7 +51,7 @@ export default async function handler(request, response) {
     }
     let existing = null;
     try { existing = await head(PATH, { access: 'private' }); }
-    catch (error) { if (error?.name !== 'BlobNotFoundError') throw error; }
+    catch (error) { if (!isBlobNotFound(error)) throw error; }
     const expected = request.headers['if-match'];
     if ((existing && expected !== existing.etag) || (!existing && expected)) {
       if (existing) response.setHeader('ETag', existing.etag);
@@ -67,7 +73,7 @@ export default async function handler(request, response) {
           response.setHeader('ETag', winner.etag);
           return response.status(409).json({ error: 'Otro dispositivo inicializó Krono al mismo tiempo. Sincroniza los datos antes de guardar.' });
         } catch (headError) {
-          if (headError?.name !== 'BlobNotFoundError') throw headError;
+          if (!isBlobNotFound(headError)) throw headError;
         }
       }
       throw error;
