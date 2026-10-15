@@ -56,5 +56,7 @@ export default async function handler(request, response) {
   target.searchParams.set('code', code);
   target.searchParams.set('state', authorization.state);
   response.setHeader('Cache-Control', 'no-store');
-  return response.redirect(303, target.toString());
+  response.status(303);
+  response.setHeader('Location', target.toString());
+  return response.end();
 }
