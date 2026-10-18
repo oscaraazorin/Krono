@@ -54,7 +54,8 @@ export function shiftSpan(shift) {
 export function paidHours(shift, rules = DEFAULT_BREAKS) {
   const span = shiftSpan(shift);
   let pause = 0;
-  if (span / 60 >= Number(rules.longAt)) pause = Number(rules.longMinutes) || 0;
+  if (shift.pauseMinutes !== undefined && shift.pauseMinutes !== null && shift.pauseMinutes !== '') pause = Math.max(0, Number(shift.pauseMinutes) || 0);
+  else if (span / 60 >= Number(rules.longAt)) pause = Number(rules.longMinutes) || 0;
   else if (span / 60 >= Number(rules.shortAt)) pause = Number(rules.shortMinutes) || 0;
   if (rules.paid) pause = 0;
   return Math.max(0, (span - pause) / 60);

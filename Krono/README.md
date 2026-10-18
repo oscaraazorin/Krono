@@ -8,13 +8,13 @@ La nómina de referencia se inicializa desde variables privadas de Vercel tras i
 
 ## Pausas
 
-Los valores iniciales reflejan los ejemplos que has dado: no hay pausa hasta 5,5 h, se descuenta 30 min a partir de 5,5 h y 60 min a partir de 8 h. En Ajustes puedes cambiar los umbrales, la duración y si la pausa cuenta como tiempo pagado. La hora concreta de la pausa no hace falta introducirla.
+Los valores iniciales reflejan los ejemplos que has dado: no hay pausa hasta 5,5 h, se descuenta 30 min a partir de 5,5 h y 60 min a partir de 8 h. En Ajustes puedes cambiar los umbrales, la duración y si la pausa cuenta como tiempo pagado. En cada turno puedes mantener la regla automática o introducir una pausa personalizada en minutos. La hora concreta de la pausa no hace falta introducirla.
 
 Para referencia, el SECO indica mínimos distintos en la normativa laboral suiza: 15 min para una jornada de más de 5,5 h, 30 min para más de 7 h y 60 min para más de 9 h. También cuenta como tiempo de trabajo una pausa durante la que no puedas dejar tu puesto. Los valores iniciales de Krono siguen tus ejemplos; ajusta los campos a tu convenio y situación. Consulta la [guía oficial del SECO sobre pausas](https://www.seco.admin.ch/dam/seco/de/dokumente/Publikationen_Dienstleistungen/Publikationen_Formulare/Arbeit/Arbeitsbedingungen/wegleitungen_arbeitsgesetzt/wegleitung_argv_1_2.pdf.download.pdf/arbeitsgesetz_wegleitung_1_2_de.pdf).
 
 ## Sincronización privada en Vercel
 
-El proyecto usa Vercel Blob **privado** y funciones API propias. El contenido de la nómina, turnos y trabajos no va a una URL pública. La copia local se guarda además en el navegador para conservar acceso sin conexión. Cada dispositivo sincroniza al guardar y comprueba si hay cambios en otro dispositivo; si detecta ediciones simultáneas, ofrece elegir la versión y conserva una copia local previa.
+El proyecto usa Vercel Blob **privado** y funciones API propias. El contenido de la nómina, turnos y trabajos no va a una URL pública. La copia local se guarda además en el navegador para conservar acceso sin conexión. Cada dispositivo sincroniza al guardar y comprueba si hay cambios en otro dispositivo. Si coinciden varios cambios, Krono reintenta automáticamente y prioriza la última copia que se sube; antes conserva un respaldo de la copia remota anterior en el almacenamiento local del navegador (`krono_auto_sync_backup`).
 
 ### Preparar el proyecto
 
@@ -27,7 +27,7 @@ El proyecto usa Vercel Blob **privado** y funciones API propias. El contenido de
 
 Krono también ofrece una conexión MCP en `https://kronotime.vercel.app/mcp` para clientes compatibles, como Codex, ChatGPT y Claude. El acceso utiliza OAuth y la contraseña de Krono; no requiere copiar `BLOB_READ_WRITE_TOKEN`, `KRONO_SESSION_SECRET` ni otras claves de Vercel al asistente. Cada asistente pide autorización en una página de Krono. Puedes conceder solo lectura o habilitar también la escritura de turnos.
 
-Herramientas disponibles: consultar resumen semanal/mensual, consultar turnos y trabajos, y añadir o modificar turnos. Los cálculos respetan tarifas y reglas de pausa guardadas. Las escrituras comprueban el ETag de Vercel Blob; si otro dispositivo cambia los datos a la vez, Krono devuelve un conflicto en lugar de sobrescribirlo.
+Herramientas disponibles: consultar resumen semanal/mensual, consultar turnos y trabajos, y añadir o modificar turnos. Los cálculos respetan tarifas, reglas de pausa y pausas personalizadas guardadas. Las escrituras comprueban el ETag de Vercel Blob; si otro dispositivo cambia los datos a la vez, el asistente debe consultar la versión actual antes de reintentar.
 
 Para conectar, añade la URL `https://kronotime.vercel.app/mcp` como servidor MCP remoto en el asistente. Si el asistente permite configurar OAuth, usa el descubrimiento estándar de Krono; inicia sesión en la página de autorización y elige los permisos que quieres conceder. Los tokens duran 14 días; cuando caduquen, el cliente solicitará autorización de nuevo. No se guardan contraseñas ni secretos en el cliente MCP.
 
