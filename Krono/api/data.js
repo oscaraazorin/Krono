@@ -65,30 +65,27 @@ export default async function handler(request, response) {
       }
     }
     let stored;
-    let writeEtag = expected;
-    for (let attempt = 0; ; attempt += 1) {
+    // The user has explicitly selected "keep this device" in the conflict
+    // dialog. That is the only path allowed to replace the current blob
+    // without an ETag; every autosave still uses ifMatch below.
+    if (explicitLocalResolution) {
+      stored = await put(PATH, JSON.stringify(data), {
+        access: 'private',
+        allowOverwrite: true,
+        contentType: 'application/json',
+        cacheControlMaxAge: 60,
+      });
+    } else {
       try {
         stored = await put(PATH, JSON.stringify(data), {
           access: 'private',
-          allowOverwrite: Boolean(writeEtag),
+          allowOverwrite: Boolean(expected),
           contentType: 'application/json',
           cacheControlMaxAge: 60,
-          ...(writeEtag ? { ifMatch: writeEtag } : {}),
+          ...(expected ? { ifMatch: expected } : {}),
         });
-        break;
       } catch (error) {
         if (error instanceof BlobPreconditionFailedError || error?.name === 'BlobPreconditionFailedError') {
-          // Only the explicit "keep this device" action may refresh the ETag
-          // and retry. Normal autosaves still surface a conflict for review.
-          if (explicitLocalResolution && attempt < 3) {
-            const latest = await get(PATH, { access: 'private', useCache: false });
-            if (!latest) {
-              writeEtag = undefined;
-              continue;
-            }
-            writeEtag = latest.blob.etag;
-            continue;
-          }
           if (!expected) {
             try {
               const winner = await head(PATH, { access: 'private' });
