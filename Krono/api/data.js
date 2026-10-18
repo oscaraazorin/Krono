@@ -49,25 +49,31 @@ export default async function handler(request, response) {
     if (!data || !Array.isArray(data.jobs) || !Array.isArray(data.shifts) || JSON.stringify(data).length > 1_000_000) {
       return response.status(400).json({ error: 'Los datos de Krono no son válidos.' });
     }
-    let existing = null;
-    try { existing = await head(PATH, { access: 'private' }); }
-    catch (error) { if (!isBlobNotFound(error)) throw error; }
     const expected = request.headers['if-match'];
-    if ((existing && expected !== existing.etag) || (!existing && expected)) {
-      if (existing) response.setHeader('ETag', existing.etag);
-      return response.status(409).json({ error: 'Los datos cambiaron en otro dispositivo. Sincroniza antes de guardar.' });
+    let existing = null;
+    // When the client supplies the ETag it received from GET, use that token
+    // directly in Blob's conditional write. A separate HEAD can return stale
+    // metadata and otherwise create a conflict that cannot be resolved by
+    // reloading the current blob.
+    if (!expected) {
+      try { existing = await head(PATH, { access: 'private' }); }
+      catch (error) { if (!isBlobNotFound(error)) throw error; }
+      if (existing) {
+        response.setHeader('ETag', existing.etag);
+        return response.status(409).json({ error: 'Los datos ya existen en Vercel. Recárgalos antes de guardar.' });
+      }
     }
     let stored;
     try {
       stored = await put(PATH, JSON.stringify(data), {
       access: 'private',
-      allowOverwrite: Boolean(existing),
+      allowOverwrite: Boolean(expected),
       contentType: 'application/json',
       cacheControlMaxAge: 60,
-      ...(existing ? { ifMatch: existing.etag } : {}),
+      ...(expected ? { ifMatch: expected } : {}),
       });
     } catch (error) {
-      if (!existing) {
+      if (!expected) {
         try {
           const winner = await head(PATH, { access: 'private' });
           response.setHeader('ETag', winner.etag);
