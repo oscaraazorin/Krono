@@ -10,6 +10,38 @@ function isBlobNotFound(error) {
     error?.constructor?.name === 'BlobNotFoundError';
 }
 
+function isBlobPreconditionFailed(error) {
+  return error instanceof BlobPreconditionFailedError ||
+    error?.name === 'BlobPreconditionFailedError' ||
+    error?.constructor?.name === 'BlobPreconditionFailedError';
+}
+
+function mergeConcurrentWrites(incoming, current) {
+  const mergeList = (key, deletedKey, sort) => {
+    const removed = [...new Set([...(current?.[deletedKey] || []), ...(incoming?.[deletedKey] || [])])];
+    const byId = new Map();
+    for (const item of current?.[key] || []) if (item?.id) byId.set(item.id, item);
+    // The latest request wins when both devices edited the same record.
+    for (const item of incoming?.[key] || []) if (item?.id) byId.set(item.id, item);
+    const items = [...byId.values()].filter(item => !removed.includes(item.id));
+    return { items: sort ? items.sort(sort) : items, removed };
+  };
+  const shifts = mergeList('shifts', 'deletedShiftIds', (a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start) || a.id.localeCompare(b.id));
+  const events = mergeList('calendarEvents', 'deletedCalendarEventIds', (a, b) => a.date.localeCompare(b.date) || (a.start || '').localeCompare(b.start || ''));
+  const calendars = mergeList('calendars', 'deletedCalendarIds');
+  return {
+    ...current,
+    ...incoming,
+    shifts: shifts.items,
+    deletedShiftIds: shifts.removed,
+    calendarEvents: events.items,
+    deletedCalendarEventIds: events.removed,
+    calendars: calendars.items,
+    deletedCalendarIds: calendars.removed,
+    updatedAt: Math.max(Date.now(), Number(incoming?.updatedAt) || 0, Number(current?.updatedAt) || 0),
+  };
+}
+
 function initialProfile() {
   const gross = Number(process.env.KRONO_MONTHLY_GROSS);
   const net = Number(process.env.KRONO_MONTHLY_NET);
@@ -65,47 +97,56 @@ export default async function handler(request, response) {
       }
     }
     let stored;
+    let savedData = data;
     // The user has explicitly selected "keep this device" in the conflict
     // dialog. That is the only path allowed to replace the current blob
     // without an ETag; every autosave still uses ifMatch below.
     if (explicitLocalResolution) {
-      stored = await put(PATH, JSON.stringify(data), {
+      stored = await put(PATH, JSON.stringify(savedData), {
         access: 'private',
         allowOverwrite: true,
         contentType: 'application/json',
         cacheControlMaxAge: 60,
       });
     } else {
-      try {
-        stored = await put(PATH, JSON.stringify(data), {
-          access: 'private',
-          allowOverwrite: Boolean(expected),
-          contentType: 'application/json',
-          cacheControlMaxAge: 60,
-          ...(expected ? { ifMatch: expected } : {}),
-        });
-      } catch (error) {
-        if (error instanceof BlobPreconditionFailedError || error?.name === 'BlobPreconditionFailedError') {
-          if (!expected) {
-            try {
-              const winner = await head(PATH, { access: 'private' });
-              response.setHeader('ETag', winner.etag);
-              return response.status(409).json({ error: 'Otro dispositivo inicializó Krono al mismo tiempo. Sincroniza los datos antes de guardar.' });
-            } catch (headError) {
-              if (!isBlobNotFound(headError)) throw headError;
-            }
+      let etag = expected;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          stored = await put(PATH, JSON.stringify(savedData), {
+            access: 'private',
+            allowOverwrite: Boolean(etag),
+            contentType: 'application/json',
+            cacheControlMaxAge: 60,
+            ...(etag ? { ifMatch: etag } : {}),
+          });
+          break;
+        } catch (error) {
+          if (!isBlobPreconditionFailed(error)) throw error;
+          let latest;
+          try { latest = await get(PATH, { access: 'private', useCache: false }); }
+          catch (readError) { if (!isBlobNotFound(readError)) throw readError; }
+          if (!latest) {
+            etag = null;
+            continue;
           }
+          const current = await new Response(latest.stream).json();
+          savedData = mergeConcurrentWrites(savedData, current);
+          etag = latest.blob.etag;
         }
-        throw error;
+      }
+      if (!stored) {
+        const latest = await head(PATH, { access: 'private' }).catch(error => isBlobNotFound(error) ? null : Promise.reject(error));
+        if (latest) response.setHeader('ETag', latest.etag);
+        return response.status(409).json({ error: 'Los cambios se fusionaron, pero Vercel sigue recibiendo escrituras simultáneas. Se conserva la copia local; vuelve a intentarlo.' });
       }
     }
     response.setHeader('ETag', stored.etag);
-    return response.status(200).json({ saved: true });
+    return response.status(200).json({ saved: true, data: savedData });
   } catch (error) {
     // Blob's conditional-write failure is an expected concurrency conflict,
     // not a storage outage. Keep it a 409 so clients fetch the newest version
     // and let the user decide how to resolve it instead of retrying a bad ETag.
-    if (error instanceof BlobPreconditionFailedError || error?.name === 'BlobPreconditionFailedError') {
+    if (isBlobPreconditionFailed(error)) {
       return response.status(409).json({ error: 'Los datos cambiaron en otro dispositivo. Sincroniza antes de guardar.' });
     }
     console.error('Krono storage error:', error);
