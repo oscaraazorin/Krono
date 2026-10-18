@@ -50,6 +50,7 @@ export default async function handler(request, response) {
       return response.status(400).json({ error: 'Los datos de Krono no son válidos.' });
     }
     const expected = request.headers['if-match'];
+    const explicitLocalResolution = request.headers['x-krono-resolution'] === 'keep-local';
     let existing = null;
     // When the client supplies the ETag it received from GET, use that token
     // directly in Blob's conditional write. A separate HEAD can return stale
@@ -64,25 +65,42 @@ export default async function handler(request, response) {
       }
     }
     let stored;
-    try {
-      stored = await put(PATH, JSON.stringify(data), {
-      access: 'private',
-      allowOverwrite: Boolean(expected),
-      contentType: 'application/json',
-      cacheControlMaxAge: 60,
-      ...(expected ? { ifMatch: expected } : {}),
-      });
-    } catch (error) {
-      if (!expected) {
-        try {
-          const winner = await head(PATH, { access: 'private' });
-          response.setHeader('ETag', winner.etag);
-          return response.status(409).json({ error: 'Otro dispositivo inicializó Krono al mismo tiempo. Sincroniza los datos antes de guardar.' });
-        } catch (headError) {
-          if (!isBlobNotFound(headError)) throw headError;
+    let writeEtag = expected;
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        stored = await put(PATH, JSON.stringify(data), {
+          access: 'private',
+          allowOverwrite: Boolean(writeEtag),
+          contentType: 'application/json',
+          cacheControlMaxAge: 60,
+          ...(writeEtag ? { ifMatch: writeEtag } : {}),
+        });
+        break;
+      } catch (error) {
+        if (error instanceof BlobPreconditionFailedError || error?.name === 'BlobPreconditionFailedError') {
+          // Only the explicit "keep this device" action may refresh the ETag
+          // and retry. Normal autosaves still surface a conflict for review.
+          if (explicitLocalResolution && attempt < 3) {
+            const latest = await get(PATH, { access: 'private', useCache: false });
+            if (!latest) {
+              writeEtag = undefined;
+              continue;
+            }
+            writeEtag = latest.blob.etag;
+            continue;
+          }
+          if (!expected) {
+            try {
+              const winner = await head(PATH, { access: 'private' });
+              response.setHeader('ETag', winner.etag);
+              return response.status(409).json({ error: 'Otro dispositivo inicializó Krono al mismo tiempo. Sincroniza los datos antes de guardar.' });
+            } catch (headError) {
+              if (!isBlobNotFound(headError)) throw headError;
+            }
+          }
         }
+        throw error;
       }
-      throw error;
     }
     response.setHeader('ETag', stored.etag);
     return response.status(200).json({ saved: true });
