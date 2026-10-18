@@ -1,4 +1,4 @@
-import { BlobNotFoundError, get, head, put } from '@vercel/blob';
+import { BlobNotFoundError, BlobPreconditionFailedError, get, head, put } from '@vercel/blob';
 import { configured, sameOrigin, validSession } from '../lib/session.js';
 
 const PATH = 'krono/private/data.json';
@@ -87,7 +87,12 @@ export default async function handler(request, response) {
     response.setHeader('ETag', stored.etag);
     return response.status(200).json({ saved: true });
   } catch (error) {
-    if (error?.name === 'BlobPreconditionFailedError') return response.status(409).json({ error: 'Los datos cambiaron en otro dispositivo. Sincroniza antes de guardar.' });
+    // Blob's conditional-write failure is an expected concurrency conflict,
+    // not a storage outage. Keep it a 409 so clients fetch the newest version
+    // and let the user decide how to resolve it instead of retrying a bad ETag.
+    if (error instanceof BlobPreconditionFailedError || error?.name === 'BlobPreconditionFailedError') {
+      return response.status(409).json({ error: 'Los datos cambiaron en otro dispositivo. Sincroniza antes de guardar.' });
+    }
     console.error('Krono storage error:', error);
     return response.status(500).json({ error: 'No se pudo conectar con el almacenamiento privado de Vercel.' });
   }

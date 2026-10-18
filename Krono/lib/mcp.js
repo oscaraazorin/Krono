@@ -1,4 +1,4 @@
-import { BlobNotFoundError, get, head, put } from '@vercel/blob';
+import { BlobNotFoundError, BlobPreconditionFailedError, get, head, put } from '@vercel/blob';
 
 const PATH = 'krono/private/data.json';
 const DEFAULT_BREAKS = { shortAt: 5.5, shortMinutes: 30, longAt: 8, longMinutes: 60, paid: false };
@@ -38,7 +38,7 @@ export async function writeKrono(data, etag) {
       ...(etag ? { ifMatch: etag } : {}),
     });
   } catch (error) {
-    if (error?.name === 'BlobPreconditionFailedError') throw new Error('CONFLICT');
+    if (error instanceof BlobPreconditionFailedError || error?.name === 'BlobPreconditionFailedError') throw new Error('CONFLICT');
     throw error;
   }
 }
