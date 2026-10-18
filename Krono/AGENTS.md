@@ -15,7 +15,7 @@ Krono is Oscar's Spanish personal work calendar. Keep it focused on shifts, paid
 ## Product rules
 
 - The current job profile and net-pay basis are derived from the user's payslip but loaded only after authentication from private Vercel environment variables. Do not hardcode personal payroll amounts in the client or repository.
-- Break defaults reflect the user's examples: 30 minutes from 5.5 hours and 60 minutes from 8 hours, unpaid by default. Break rules are configurable in Ajustes and should not be conflated with Swiss statutory minimums.
+- New shifts start with the configurable default pause (60 minutes initially); the user can edit the minutes directly on each shift. Existing shifts retain their saved pause duration and the legacy rule-based fallback. Paid/unpaid is configurable in Ajustes; do not conflate user preferences with Swiss statutory minimums.
 - Times use the local timezone and 24-hour clock. An end earlier than a start is an overnight shift.
 - Preserve `input type="time"` for the native iPhone time picker. Keep tap targets comfortable and the dark theme readable on small iPhone screens.
 - The weekly view summarizes actual recorded hours and estimated gross/net income. Do not add weekly target hours or planned schedule UI.

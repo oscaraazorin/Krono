@@ -8,7 +8,7 @@ La nómina de referencia se inicializa desde variables privadas de Vercel tras i
 
 ## Pausas
 
-Los valores iniciales reflejan los ejemplos que has dado: no hay pausa hasta 5,5 h, se descuenta 30 min a partir de 5,5 h y 60 min a partir de 8 h. En Ajustes puedes cambiar los umbrales, la duración y si la pausa cuenta como tiempo pagado. En cada turno puedes mantener la regla automática o introducir una pausa personalizada en minutos. La hora concreta de la pausa no hace falta introducirla.
+Cada turno nuevo empieza con una pausa predeterminada de 60 minutos. Puedes cambiar los minutos directamente en el formulario del turno, incluso poner 0. En Ajustes puedes modificar la duración predeterminada y elegir si la pausa cuenta como tiempo pagado. Los turnos ya guardados conservan su pausa; los turnos antiguos sin una pausa guardada mantienen el cálculo anterior según sus reglas.
 
 Para referencia, el SECO indica mínimos distintos en la normativa laboral suiza: 15 min para una jornada de más de 5,5 h, 30 min para más de 7 h y 60 min para más de 9 h. También cuenta como tiempo de trabajo una pausa durante la que no puedas dejar tu puesto. Los valores iniciales de Krono siguen tus ejemplos; ajusta los campos a tu convenio y situación. Consulta la [guía oficial del SECO sobre pausas](https://www.seco.admin.ch/dam/seco/de/dokumente/Publikationen_Dienstleistungen/Publikationen_Formulare/Arbeit/Arbeitsbedingungen/wegleitungen_arbeitsgesetzt/wegleitung_argv_1_2.pdf.download.pdf/arbeitsgesetz_wegleitung_1_2_de.pdf).
 
