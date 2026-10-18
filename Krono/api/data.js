@@ -3,6 +3,7 @@ import { configured, sameOrigin, validSession } from '../lib/session.js';
 
 const PATH = 'krono/private/data.json';
 const HEADERS = { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' };
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function isBlobNotFound(error) {
   return error instanceof BlobNotFoundError ||
@@ -14,6 +15,22 @@ function isBlobPreconditionFailed(error) {
   return error instanceof BlobPreconditionFailedError ||
     error?.name === 'BlobPreconditionFailedError' ||
     error?.constructor?.name === 'BlobPreconditionFailedError';
+}
+
+async function getLatestBlob() {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return await get(PATH, { access: 'private', useCache: false });
+    } catch (error) {
+      if (isBlobNotFound(error)) return null;
+      if (attempt === 3) throw error;
+      // Blob can briefly return a 5xx while another device is replacing the
+      // same object. Retry the read before turning a normal sync race into a
+      // failed save (and keep the retries bounded to avoid a request loop).
+      await delay(120 * (2 ** attempt) + Math.random() * 100);
+    }
+  }
+  return null;
 }
 
 function mergeConcurrentWrites(incoming, current) {
@@ -65,7 +82,7 @@ export default async function handler(request, response) {
 
   try {
     if (request.method === 'GET') {
-      const blob = await get(PATH, { access: 'private', useCache: false });
+      const blob = await getLatestBlob();
       if (!blob) {
         response.setHeader('X-Krono-Seed', 'true');
         return response.status(200).json(initialProfile());
@@ -122,9 +139,7 @@ export default async function handler(request, response) {
           break;
         } catch (error) {
           if (!isBlobPreconditionFailed(error)) throw error;
-          let latest;
-          try { latest = await get(PATH, { access: 'private', useCache: false }); }
-          catch (readError) { if (!isBlobNotFound(readError)) throw readError; }
+          const latest = await getLatestBlob();
           if (!latest) {
             etag = null;
             continue;
@@ -132,7 +147,7 @@ export default async function handler(request, response) {
           const current = await new Response(latest.stream).json();
           savedData = mergeConcurrentWrites(savedData, current);
           etag = latest.blob.etag;
-          await new Promise(resolve => setTimeout(resolve, 30 + Math.random() * 120 + attempt * 25));
+          await delay(160 * (2 ** Math.min(attempt, 3)) + Math.random() * 140);
         }
       }
       if (!stored) {
