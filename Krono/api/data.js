@@ -110,7 +110,7 @@ export default async function handler(request, response) {
       });
     } else {
       let etag = expected;
-      for (let attempt = 0; attempt < 5; attempt++) {
+      for (let attempt = 0; attempt < 8; attempt++) {
         try {
           stored = await put(PATH, JSON.stringify(savedData), {
             access: 'private',
@@ -132,6 +132,7 @@ export default async function handler(request, response) {
           const current = await new Response(latest.stream).json();
           savedData = mergeConcurrentWrites(savedData, current);
           etag = latest.blob.etag;
+          await new Promise(resolve => setTimeout(resolve, 30 + Math.random() * 120 + attempt * 25));
         }
       }
       if (!stored) {
